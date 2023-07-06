@@ -20,7 +20,7 @@ struct CustomRotarySlider : juce::Slider {
 //==============================================================================
 /**
 */
-class SimpleEqAudioProcessorEditor  : public juce::AudioProcessorEditor
+class SimpleEqAudioProcessorEditor : public juce::AudioProcessorEditor
 {
 public:
     SimpleEqAudioProcessorEditor (SimpleEqAudioProcessor&);
@@ -35,6 +35,8 @@ private:
     // access the processor object that created it.
     SimpleEqAudioProcessor& audioProcessor;
 
+    juce::Atomic<bool> parametersChanged{ false };
+
     CustomRotarySlider peakFreqSlider, peakGainSlider, peakQualitySlider, lowCutFreqSlider, highCutFreqSlider, lowCutSlopeSlider, highCutSlopeSlider;
 
     using ABVTS = juce::AudioProcessorValueTreeState;
@@ -43,6 +45,8 @@ private:
     Attachment peakFreqSliderAttachment, peakGainSliderAttachment, peakQualitySliderAttachment, lowCutFreqSliderAttachment, highCutFreqSliderAttachment, lowCutSlopeSliderAttachment, highCutSlopeSliderAttachment;
 
     std::vector<juce::Component*> getComps();
+
+    MonoChain monoChain;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (SimpleEqAudioProcessorEditor)
 };
