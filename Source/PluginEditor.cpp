@@ -74,12 +74,36 @@ void RotarySliderWithLabels::paint(juce::Graphics& g) {
 
     auto sliderBounds = getSliderBounds();
 
-    g.setColour(Colours::red);
+    /*g.setColour(Colours::red);
     g.drawRect(getLocalBounds());
     g.setColour(Colours::yellow);
-    g.drawRect(sliderBounds);
+    g.drawRect(sliderBounds);*/
 
     getLookAndFeel().drawRotarySlider(g, sliderBounds.getX(), sliderBounds.getY(), sliderBounds.getWidth(), sliderBounds.getHeight(), jmap(getValue(), range.getStart(), range.getEnd(), 0.0, 1.0), startAng, endAng, *this);
+
+    auto center = sliderBounds.toFloat().getCentre();
+    auto radius = sliderBounds.getWidth() * 0.5f;
+
+    g.setColour(Colour(0u, 172u, 1u));
+    g.setFont(getTextHeight());
+
+    auto numChoices = labels.size();
+    for (int i = 0; i < numChoices; ++i) {
+        auto pos = labels[i].pos;
+        jassert(0.f <= pos);
+        jassert(pos <= 1.f);
+        auto ang = jmap(pos, 0.f, 1.f, startAng, endAng);
+
+        auto c = center.getPointOnCircumference(radius + getTextHeight() * 0.5f + 1, ang);
+
+        Rectangle<float> r;
+        auto str = labels[i].label;
+        r.setSize(g.getCurrentFont().getStringWidth(str), getTextHeight());
+        r.setCentre(c);
+        r.setY(r.getY() + getTextHeight());
+
+        g.drawFittedText(str, r.toNearestInt(), juce::Justification::centred, 1);
+    }
 }
 
 juce::Rectangle<int> RotarySliderWithLabels::getSliderBounds() const {
@@ -96,7 +120,34 @@ juce::Rectangle<int> RotarySliderWithLabels::getSliderBounds() const {
 }
 
 juce::String RotarySliderWithLabels::getDisplayString() const {
-    return juce::String(getValue()); 
+    if (auto* choiceParam = dynamic_cast<juce::AudioParameterChoice*>(param)) {
+        return choiceParam->getCurrentChoiceName();
+    }
+
+        juce::String str;
+        bool addK = false;
+
+        if (auto* floatParam = dynamic_cast<juce::AudioParameterFloat*>(param)) {
+            float val = getValue();
+
+            if (val > 999.f) {
+                val /= 1000.f;
+                addK = true;
+            }
+            str = juce::String(val, (addK ? 2:0));
+        }
+        else {
+            jassertfalse;
+        }
+
+        if (suffix.isNotEmpty()) {
+            str << " ";
+            if (addK) {
+                str << "k";
+            }
+            str << suffix;
+        }
+        return str;
 }
 
 //==============================================================================
@@ -234,6 +285,29 @@ SimpleEqAudioProcessorEditor::SimpleEqAudioProcessorEditor(SimpleEqAudioProcesso
 {
     // Make sure that before the constructor has finished, you've set the
     // editor's size to whatever you need it to be.
+
+    peakFreqSlider.labels.add({ 0.f, "20Hz" });
+    peakFreqSlider.labels.add({ 1.f, "20kHz" });
+
+    peakGainSlider.labels.add({ 0.f, "-24dB" });
+    peakGainSlider.labels.add({ 1.f, "+24dB" });
+
+    peakQualitySlider.labels.add({ 0.f, "0.1" });
+    peakQualitySlider.labels.add({ 1.f, "10.0" });
+
+    lowCutFreqSlider.labels.add({ 0.f, "20Hz" });
+    lowCutFreqSlider.labels.add({ 1.f, "20kHz" });
+
+    highCutFreqSlider.labels.add({ 0.f, "20Hz" });
+    highCutFreqSlider.labels.add({ 1.f, "20kHz" });
+
+    lowCutSlopeSlider.labels.add({ 0.0f, "12" });
+    lowCutSlopeSlider.labels.add({ 1.f, "48" });
+
+    highCutSlopeSlider.labels.add({ 0.0f, "12" });
+    highCutSlopeSlider.labels.add({ 1.f, "48" });
+
+
     for (auto* comp : getComps()) {
         addAndMakeVisible(comp);
     }
