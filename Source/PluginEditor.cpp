@@ -151,14 +151,17 @@ juce::String RotarySliderWithLabels::getDisplayString() const {
 }
 
 //==============================================================================
-ResponseCurveComponent::ResponseCurveComponent(SimpleEqAudioProcessor& p) : audioProcessor(p) {
+ResponseCurveComponent::ResponseCurveComponent(SimpleEqAudioProcessor& p) : audioProcessor(p),
+leftPathProducer(audioProcessor.leftChannelFifo),
+rightPathProducer(audioProcessor.rightChannelFifo)
+{
     const auto& params = audioProcessor.getParameters();
     for (auto param : params) {
         param->addListener(this);
     }
+
     updateChain();
-    updateChain();
-    startTimer(60);
+    startTimerHz(60);
 }
 
 ResponseCurveComponent::~ResponseCurveComponent() {
@@ -172,13 +175,33 @@ void ResponseCurveComponent::parameterValueChanged(int parameterIndex, float new
     parametersChanged.set(true);
 }
 
-void ResponseCurveComponent::timerCallback() {
-    if (parametersChanged.compareAndSetBool(false, true)) {
-        //update the monochain
-        updateChain();
-        //repain the gui
-        repaint();
+
+void PathProducer::process(juce::Rectangle<float> fftBounds, double sampleRate) {
+    juce::AudioBuffer<float> tempIncomingBuffer;
+    while (leftChannelFifo->getNumCompleteBuffersAvailable() > 0) {
+        if (leftChannelFifo->getAudioBuffer(tempIncomingBuffer)) {
+            auto size = tempIncomingBuffer.getNumSamples();
+
+            juce::FloatVectorOperations::copy(monoBuffer.getWritePointer(0, 0),
+                monoBuffer.getReadPointer(0, size),
+                monoBuffer.getNumSamples() - size);
+
+            juce::FloatVectorOperations::copy(monoBuffer.getWritePointer(0, monoBuffer.getNumSamples() - size),
+                tempIncomingBuffer.getReadPointer(0, 0),
+                size);
+
+            leftChannelFFTDataGenerator.produceFFTDataForRendering(monoBuffer, -48.f);
+        }
     }
+}
+void ResponseCurveComponent::timerCallback() {
+    auto fftBounds = getDrawArea().toFloat();
+    auto sampleRate = audioProcessor.getSampleRate();
+
+    leftPathProducer.process(fftBounds, sampleRate);
+    rightPathProducer.process(fftBounds, sampleRate);
+
+    repaint();
 }
 
 void ResponseCurveComponent::updateChain() {
@@ -261,6 +284,18 @@ void ResponseCurveComponent::paint(juce::Graphics& g)
     for (size_t i = 1; i < mags.size(); ++i) {
         responseCurve.lineTo(responseArea.getX() + i, map(mags[i]));
     }
+
+    auto leftChannelFFTPath = leftPathProducer.getPath();
+    leftChannelFFTPath.applyTransform(AffineTransform().translation(responseArea.getX(), responseArea.getY()));
+
+    g.setColour(Colours::skyblue);
+    g.strokePath(leftChannelFFTPath, PathStrokeType(1));
+
+    auto rightChannelFFTPath = rightPathProducer.getPath();
+    rightChannelFFTPath.applyTransform(AffineTransform().translation(responseArea.getX(), responseArea.getY()));
+
+    g.setColour(Colours::lightyellow);
+    g.strokePath(rightChannelFFTPath, PathStrokeType(1));
 
     g.setColour(juce::Colours::orange);
     g.drawRoundedRectangle(getRenderArea().toFloat(), 4.f, 1.f);
