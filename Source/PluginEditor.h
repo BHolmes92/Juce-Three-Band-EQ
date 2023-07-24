@@ -181,6 +181,9 @@ struct ResponseCurveComponent : juce::Component, juce::AudioProcessorParameter::
     void timerCallback() override;
     void paint(juce::Graphics& g) override;
     void resized() override;
+    void toggleAnalysisEnablement(bool enabled) {
+        showFFTAnalysis = enabled;
+    }
 private:
     SimpleEqAudioProcessor& audioProcessor;
     juce::Atomic<bool> parametersChanged{ false };
@@ -192,7 +195,7 @@ private:
     juce::Rectangle<int> getDrawArea();
 
     PathProducer leftPathProducer, rightPathProducer;
-
+    bool showFFTAnalysis = true;
 };
 
 //==============================================================================

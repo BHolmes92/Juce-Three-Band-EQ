@@ -222,11 +222,14 @@ void PathProducer::process(juce::Rectangle<float> fftBounds, double sampleRate) 
     }
 }
 void ResponseCurveComponent::timerCallback() {
-    auto fftBounds = getDrawArea().toFloat();
-    auto sampleRate = audioProcessor.getSampleRate();
+    if (showFFTAnalysis) {
+        auto fftBounds = getDrawArea().toFloat();
+        auto sampleRate = audioProcessor.getSampleRate();
 
-    leftPathProducer.process(fftBounds, sampleRate);
-    rightPathProducer.process(fftBounds, sampleRate);
+        leftPathProducer.process(fftBounds, sampleRate);
+        rightPathProducer.process(fftBounds, sampleRate);
+    }
+    
 
     repaint();
 }
@@ -308,6 +311,19 @@ void ResponseCurveComponent::paint(juce::Graphics& g)
             }
         }
         
+        if (showFFTAnalysis) {
+            auto leftChannelFFTPath = leftPathProducer.getPath();
+            leftChannelFFTPath.applyTransform(AffineTransform().translation(responseArea.getX(), responseArea.getY()));
+
+            g.setColour(Colours::skyblue);
+            g.strokePath(leftChannelFFTPath, PathStrokeType(1));
+
+            auto rightChannelFFTPath = rightPathProducer.getPath();
+            rightChannelFFTPath.applyTransform(AffineTransform().translation(responseArea.getX(), responseArea.getY()));
+
+            g.setColour(Colours::lightyellow);
+            g.strokePath(rightChannelFFTPath, PathStrokeType(1));
+        }
 
         mags[i] = juce::Decibels::gainToDecibels(mag);
     }
@@ -326,17 +342,7 @@ void ResponseCurveComponent::paint(juce::Graphics& g)
         responseCurve.lineTo(responseArea.getX() + i, map(mags[i]));
     }
 
-    auto leftChannelFFTPath = leftPathProducer.getPath();
-    leftChannelFFTPath.applyTransform(AffineTransform().translation(responseArea.getX(), responseArea.getY()));
-
-    g.setColour(Colours::skyblue);
-    g.strokePath(leftChannelFFTPath, PathStrokeType(1));
-
-    auto rightChannelFFTPath = rightPathProducer.getPath();
-    rightChannelFFTPath.applyTransform(AffineTransform().translation(responseArea.getX(), responseArea.getY()));
-
-    g.setColour(Colours::lightyellow);
-    g.strokePath(rightChannelFFTPath, PathStrokeType(1));
+    
 
     g.setColour(juce::Colours::orange);
     g.drawRoundedRectangle(getRenderArea().toFloat(), 4.f, 1.f);
@@ -526,6 +532,14 @@ SimpleEqAudioProcessorEditor::SimpleEqAudioProcessorEditor(SimpleEqAudioProcesso
             comp->highCutSlopeSlider.setEnabled(!bypassed);
         }
     };
+
+    analyzerBypassButton.onClick = [safePtr]() {
+        if (auto* comp = safePtr.getComponent()) {
+            auto enabled = comp->analyzerBypassButton.getToggleState();
+            comp->responseCurveComponent.toggleAnalysisEnablement(enabled);
+        }
+    };
+
     setSize (600, 480);
 }
 
