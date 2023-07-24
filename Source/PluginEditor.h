@@ -189,7 +189,12 @@ private:
     juce::Atomic<bool> parametersChanged{ false };
     MonoChain monoChain;
     void updateChain();
+    void updateResponseCurve();
+    juce::Path responseCurve;
     juce::Image background;
+
+    void drawTextLabels(juce::Graphics& g);
+    void drawBackgroundGrid(juce::Graphics& g);
 
     juce::Rectangle<int> getRenderArea();
     juce::Rectangle<int> getDrawArea();

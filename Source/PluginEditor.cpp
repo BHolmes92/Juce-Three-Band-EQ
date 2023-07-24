@@ -229,6 +229,11 @@ void ResponseCurveComponent::timerCallback() {
         leftPathProducer.process(fftBounds, sampleRate);
         rightPathProducer.process(fftBounds, sampleRate);
     }
+
+    if (parametersChanged.compareAndSetBool(false, true)) {
+        updateChain();
+        updateResponseCurve();
+    }
     
 
     repaint();
@@ -256,105 +261,145 @@ void ResponseCurveComponent::paint(juce::Graphics& g)
     using namespace juce;
     // (Our component is opaque, so we must completely fill the background with a solid colour)
     g.fillAll(Colours::black);
-    g.drawImage(background, getLocalBounds().toFloat());
+
+    drawBackgroundGrid(g);
 
     auto responseArea = getDrawArea();
-    auto w = responseArea.getWidth();
 
-    auto& lowcut = monoChain.get<ChainPositions::LowCut>();
-    auto& highcut = monoChain.get<ChainPositions::HighCut>();
-    auto& peak = monoChain.get<ChainPositions::Peak>();
+    if (showFFTAnalysis)
+    {
+        auto leftChannelFFTPath = leftPathProducer.getPath();
+        leftChannelFFTPath.applyTransform(AffineTransform().translation(responseArea.getX(), responseArea.getY()));
 
-    auto SampleRate = audioProcessor.getSampleRate();
+        g.setColour(Colour(97u, 18u, 167u)); //purple-
+        g.strokePath(leftChannelFFTPath, PathStrokeType(1.f));
 
-    std::vector<double> mags;
+        auto rightChannelFFTPath = rightPathProducer.getPath();
+        rightChannelFFTPath.applyTransform(AffineTransform().translation(responseArea.getX(), responseArea.getY()));
 
-    mags.resize(w);
-
-    for (int i = 0; i < w; ++i) {
-        double mag = 1.f;
-        auto freq = mapToLog10(double(i) / double(w), 20.0, 20000.0);
-
-        if (!monoChain.isBypassed<ChainPositions::Peak>()) {
-            if (!monoChain.isBypassed<ChainPositions::Peak>()) {
-                mag *= peak.coefficients->getMagnitudeForFrequency(freq, SampleRate);
-            }
-        }
-        
-        if (!monoChain.isBypassed<ChainPositions::LowCut>()) {
-            if (!lowcut.isBypassed<0>()) {
-                mag *= lowcut.get<0>().coefficients->getMagnitudeForFrequency(freq, SampleRate);
-            }
-            if (!lowcut.isBypassed<1>()) {
-                mag *= lowcut.get<1>().coefficients->getMagnitudeForFrequency(freq, SampleRate);
-            }
-            if (!lowcut.isBypassed<2>()) {
-                mag *= lowcut.get<2>().coefficients->getMagnitudeForFrequency(freq, SampleRate);
-            }
-            if (!lowcut.isBypassed<3>()) {
-                mag *= lowcut.get<3>().coefficients->getMagnitudeForFrequency(freq, SampleRate);
-            }
-        }
-        
-        if (!monoChain.isBypassed<ChainPositions::HighCut>()) {
-            if (!highcut.isBypassed<0>()) {
-                mag *= highcut.get<0>().coefficients->getMagnitudeForFrequency(freq, SampleRate);
-            }
-            if (!highcut.isBypassed<1>()) {
-                mag *= highcut.get<1>().coefficients->getMagnitudeForFrequency(freq, SampleRate);
-            }
-            if (!highcut.isBypassed<2>()) {
-                mag *= highcut.get<2>().coefficients->getMagnitudeForFrequency(freq, SampleRate);
-            }
-            if (!highcut.isBypassed<3>()) {
-                mag *= highcut.get<3>().coefficients->getMagnitudeForFrequency(freq, SampleRate);
-            }
-        }
-        
-        if (showFFTAnalysis) {
-            auto leftChannelFFTPath = leftPathProducer.getPath();
-            leftChannelFFTPath.applyTransform(AffineTransform().translation(responseArea.getX(), responseArea.getY()));
-
-            g.setColour(Colours::skyblue);
-            g.strokePath(leftChannelFFTPath, PathStrokeType(1));
-
-            auto rightChannelFFTPath = rightPathProducer.getPath();
-            rightChannelFFTPath.applyTransform(AffineTransform().translation(responseArea.getX(), responseArea.getY()));
-
-            g.setColour(Colours::lightyellow);
-            g.strokePath(rightChannelFFTPath, PathStrokeType(1));
-        }
-
-        mags[i] = juce::Decibels::gainToDecibels(mag);
+        g.setColour(Colour(215u, 201u, 134u));
+        g.strokePath(rightChannelFFTPath, PathStrokeType(1.f));
     }
-
-    Path responseCurve;
-
-    const double outputMin = responseArea.getBottom();
-    const double outputMax = responseArea.getY();
-    auto map = [outputMin, outputMax](double input) {
-        return jmap(input, -24.0, 24.0, outputMin, outputMax);
-    };
-
-    responseCurve.startNewSubPath(responseArea.getX(), map(mags.front()));
-
-    for (size_t i = 1; i < mags.size(); ++i) {
-        responseCurve.lineTo(responseArea.getX() + i, map(mags[i]));
-    }
-
-    
-
-    g.setColour(juce::Colours::orange);
-    g.drawRoundedRectangle(getRenderArea().toFloat(), 4.f, 1.f);
 
     g.setColour(Colours::white);
     g.strokePath(responseCurve, PathStrokeType(2.f));
 
-}
+    Path border;
 
-void ResponseCurveComponent::resized() {
+    border.setUsingNonZeroWinding(false);
+
+    border.addRoundedRectangle(getRenderArea(), 4);
+    border.addRectangle(getLocalBounds());
+
+    g.setColour(Colours::black);
+
+    g.fillPath(border);
+
+    drawTextLabels(g);
+
+    g.setColour(Colours::orange);
+    g.drawRoundedRectangle(getRenderArea().toFloat(), 4.f, 1.f);
+
+}
+void ResponseCurveComponent::drawBackgroundGrid(juce::Graphics& g) {
     using namespace juce;
     background = Image(Image::PixelFormat::RGB, getWidth(), getHeight(), true);
+
+    Array<float> freqs{ 20, 50, 100, 200, 500, 1000, 2000, 5000, 10000, 20000 };
+
+    auto renderArea = getDrawArea();
+    auto left = renderArea.getX();
+    auto right = renderArea.getRight();
+    auto top = renderArea.getY();
+    auto bottom = renderArea.getBottom();
+    auto width = renderArea.getWidth();
+
+    Array<float> xs;
+    for (auto f : freqs) {
+        auto normX = mapFromLog10(f, 20.f, 20000.f);
+        xs.add(left + width * normX);
+    }
+
+    g.setColour(Colours::dimgrey);
+    for (auto f : xs) {
+        g.drawVerticalLine(f, top, bottom);
+    }
+
+    Array<float>gain{ -24, -12, 0, 12, 24 };
+    for (auto gDb : gain) {
+        auto y = jmap(gDb, -24.f, 24.f, float(bottom), float(top));
+        g.setColour(gDb == 0.f ? Colour(0u, 172u, 1u) : Colours::darkgrey);
+        g.drawHorizontalLine(y, left, right);
+    }
+}
+
+void ResponseCurveComponent::drawTextLabels(juce::Graphics& g) {
+    using namespace juce;
+    Array<float> freqs{ 20, 50, 100, 200, 500, 1000, 2000, 5000, 10000, 20000 };
+    Array<float>gain{ -24, -12, 0, 12, 24 };
+    auto renderArea = getDrawArea();
+    auto left = renderArea.getX();
+    auto right = renderArea.getRight();
+    auto top = renderArea.getY();
+    auto bottom = renderArea.getBottom();
+    auto width = renderArea.getWidth();
+    g.setColour(Colours::lightgrey);
+    const int fontHeight = 10;
+    g.setFont(fontHeight);
+    Array<float> xs;
+    for (auto f : freqs) {
+        auto normX = mapFromLog10(f, 20.f, 20000.f);
+        xs.add(left + width * normX);
+    }
+    for (int i = 0; i < freqs.size(); ++i) {
+        auto f = freqs[i];
+        auto x = xs[i];
+
+        bool addK = false;
+        String str;
+        if (f > 999.f) {
+            addK = true;
+            f /= 1000.f;
+        }
+        str << f;
+        if (addK) {
+            str << "k";
+        }
+        str << "Hz";
+
+        auto textWidth = g.getCurrentFont().getStringWidth(str);
+
+        Rectangle<int> r;
+        r.setSize(textWidth, fontHeight);
+        r.setCentre(x, 0);
+        r.setY(1);
+
+        g.drawFittedText(str, r, juce::Justification::centred, 1);
+    }
+
+    for (auto gDb : gain) {
+        auto y = jmap(gDb, -24.f, 24.f, float(bottom), float(top));
+
+        String str;
+        if (gDb > 0) {
+            str << "+";
+        }
+        str << gDb;
+
+        auto textWidth = g.getCurrentFont().getStringWidth(str);
+
+        Rectangle<int> r;
+        r.setSize(textWidth, fontHeight);
+        r.setX(getWidth() - textWidth);
+        r.setCentre(r.getCentreX(), y);
+
+        g.setColour(gDb == 0.f ? Colour(0u, 172u, 1u) : Colours::lightgrey);
+        g.drawFittedText(str, r, juce::Justification::centred, 1);
+    }
+}
+void ResponseCurveComponent::resized() {
+    using namespace juce;
+    /*background = Image(Image::PixelFormat::RGB, getWidth(), getHeight(), true);
     Graphics g(background);
 
     Array<float> freqs{ 20, 50, 100, 200, 500, 1000, 2000, 5000, 10000, 20000 };
@@ -382,9 +427,9 @@ void ResponseCurveComponent::resized() {
         auto y = jmap(gDb, -24.f, 24.f, float(bottom), float(top));
         g.setColour(gDb == 0.f ? Colour(0u, 172u, 1u) : Colours::darkgrey);
         g.drawHorizontalLine(y, left, right);
-    }
+    }*/
 
-    g.setColour(Colours::lightgrey);
+    /*g.setColour(Colours::lightgrey);
     const int fontHeight = 10;
     g.setFont(fontHeight);
 
@@ -432,7 +477,75 @@ void ResponseCurveComponent::resized() {
 
         g.setColour(gDb == 0.f ? Colour(0u, 172u, 1u) : Colours::lightgrey);
         g.drawFittedText(str, r, juce::Justification::centred, 1);
+    }*/
+    responseCurve.preallocateSpace(getWidth() * 3);
+    updateResponseCurve();
+}
+
+void ResponseCurveComponent::updateResponseCurve(){
+    using namespace juce;
+    auto responseArea = getDrawArea();
+    auto w = responseArea.getWidth();
+
+    auto& lowcut = monoChain.get<ChainPositions::LowCut>();
+    auto& highcut = monoChain.get<ChainPositions::HighCut>();
+    auto& peak = monoChain.get<ChainPositions::Peak>();
+
+    auto sampleRate = audioProcessor.getSampleRate();
+
+    std::vector<double> mags;
+
+    mags.resize(w);
+
+    for (int i = 0; i < w; ++i) {
+        double mag = 1.f;
+        auto freq = mapToLog10(double(i) / double(w), 20.0, 20000.0);
+
+        if (!monoChain.isBypassed<ChainPositions::Peak>()) {
+            mag *= peak.coefficients->getMagnitudeForFrequency(freq, sampleRate);
+        }
+
+        if (!monoChain.isBypassed<ChainPositions::LowCut>()) {
+            if (!lowcut.isBypassed<0>()) {
+                mag *= lowcut.get<0>().coefficients->getMagnitudeForFrequency(freq, sampleRate);
+            }
+            if (!lowcut.isBypassed<1>()) {
+                mag *= lowcut.get<1>().coefficients->getMagnitudeForFrequency(freq, sampleRate);
+            }
+            if (!lowcut.isBypassed<2>()) {
+                mag *= lowcut.get<2>().coefficients->getMagnitudeForFrequency(freq, sampleRate);
+            }
+            if (!lowcut.isBypassed<3>()) {
+                mag *= lowcut.get<3>().coefficients->getMagnitudeForFrequency(freq, sampleRate);
+            }
+        }
+        if (!monoChain.isBypassed<ChainPositions::HighCut>()) {
+            if (!highcut.isBypassed<0>()) {
+                mag *= highcut.get<0>().coefficients->getMagnitudeForFrequency(freq, sampleRate);
+            }
+            if (!highcut.isBypassed<1>()) {
+                mag *= highcut.get<1>().coefficients->getMagnitudeForFrequency(freq, sampleRate);
+            }
+            if (!highcut.isBypassed<2>()) {
+                mag *= highcut.get<2>().coefficients->getMagnitudeForFrequency(freq, sampleRate);
+            }
+            if (!highcut.isBypassed<3>()) {
+                mag *= highcut.get<3>().coefficients->getMagnitudeForFrequency(freq, sampleRate);
+            }
+        }
+        responseCurve.clear();
     }
+    const double outputMin = responseArea.getBottom();
+    const double outputMax = responseArea.getY();
+    auto map = [outputMin, outputMax](double input) {
+        return jmap(input, -24.0, 24.0, outputMin, outputMax);
+    };
+    responseCurve.startNewSubPath(responseArea.getX(), map(mags.front()));
+
+    for (size_t i = 1; i < mags.size(); ++i) {
+        responseCurve.lineTo(responseArea.getX() + 1, map(mags[i]));
+    }
+
 }
 
 juce::Rectangle<int> ResponseCurveComponent::getRenderArea() {
@@ -450,6 +563,8 @@ juce::Rectangle<int> ResponseCurveComponent::getDrawArea() {
     bounds.removeFromBottom(4);
     return bounds;
 }
+
+
 
 //==============================================================================
 SimpleEqAudioProcessorEditor::SimpleEqAudioProcessorEditor(SimpleEqAudioProcessor& p)
