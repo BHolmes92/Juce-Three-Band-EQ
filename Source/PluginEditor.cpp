@@ -48,20 +48,30 @@ void LookAndFeel::drawRotarySlider(juce::Graphics& g, int x, int y, int width, i
         g.setColour(Colours::white);
         g.drawFittedText(text, r.toNearestInt(), juce::Justification::centred, 1);   
     }
+}
 
-    
+void LookAndFeel::drawToggleButton(juce::Graphics& g, juce::ToggleButton& toggleButton, bool shouldDrawButtonAsHighlighted, bool shouldDrawButtonAsDown){
+    using namespace juce;
+    //TODO Hittest to clean up bounding box behaviour
+    Path powerButton;
+    auto bounds = toggleButton.getLocalBounds();
+    auto size = jmin(bounds.getWidth(), bounds.getHeight()) - 6;
+    auto r = bounds.withSizeKeepingCentre(size, size).toFloat();
 
-    
+    float ang = 30.f;
+    size -= 6;
+    powerButton.addCentredArc(r.getCentreX(), r.getCentreY(), size * 0.5, size * 0.5, 0, degreesToRadians(ang), degreesToRadians(360 - ang), true); //Circle part of symbol
+    powerButton.startNewSubPath(r.getCentreX(), r.getY());
+    powerButton.lineTo(r.getCentre());
 
-    /*p.addRectangle(r);
+    PathStrokeType pst(2.f, PathStrokeType::JointStyle::curved);
 
-    jassert(rotaryStartAngle < rotaryEndAngle);
+    auto color = toggleButton.getToggleState() ? Colours::dimgrey : Colour(0u, 172u, 1u);
+    g.setColour(color);
+    g.strokePath(powerButton, pst);
+    g.drawEllipse(r, 2);
 
-    auto sliderAngRad = jmap(sliderPosProportional, 0.f, 1.f, rotaryStartAngle, rotaryEndAngle);
-
-    p.applyTransform(AffineTransform().rotated(sliderAngRad, center.getX(), center.getY()));
-
-    g.fillPath(p);*/
+    g.strokePath(powerButton, pst);
 }
 
 void RotarySliderWithLabels::paint(juce::Graphics& g) {
@@ -471,6 +481,9 @@ SimpleEqAudioProcessorEditor::SimpleEqAudioProcessorEditor(SimpleEqAudioProcesso
         addAndMakeVisible(comp);
     }
 
+    peakBypassButton.setLookAndFeel(nullptr);
+    highCutBypassButton.setLookAndFeel(nullptr);
+    lowCutBypassButton.setLookAndFeel(nullptr);
 
     setSize (600, 480);
 }
