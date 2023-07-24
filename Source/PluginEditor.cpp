@@ -45,10 +45,10 @@ void LookAndFeel::drawRotarySlider(juce::Graphics& g, int x, int y, int width, i
 
         r.setSize(strWidth + 4, rswl->getTextHeight() + 2);
         r.setCentre(bounds.getCentre());
-        g.setColour(Colours::black);
+        g.setColour(enabled ? Colour(97u, 18u, 167u) : Colours::darkgrey);
         g.fillRect(r);
 
-        g.setColour(Colours::white);
+        g.setColour(enabled ? Colours::white : Colours::lightgrey);
         g.drawFittedText(text, r.toNearestInt(), juce::Justification::centred, 1);   
     }
 }
