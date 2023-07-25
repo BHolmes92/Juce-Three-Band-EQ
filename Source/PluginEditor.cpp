@@ -101,10 +101,6 @@ void RotarySliderWithLabels::paint(juce::Graphics& g) {
 
     auto sliderBounds = getSliderBounds();
 
-    /*g.setColour(Colours::red);
-    g.drawRect(getLocalBounds());
-    g.setColour(Colours::yellow);
-    g.drawRect(sliderBounds);*/
 
     getLookAndFeel().drawRotarySlider(g, sliderBounds.getX(), sliderBounds.getY(), sliderBounds.getWidth(), sliderBounds.getHeight(), jmap(getValue(), range.getStart(), range.getEnd(), 0.0, 1.0), startAng, endAng, *this);
 
@@ -223,8 +219,8 @@ void PathProducer::process(juce::Rectangle<float> fftBounds, double sampleRate)
             leftChannelFFTDataGenerator.produceFFTDataForRendering(monoBuffer, -48.f);
         }
     }
-
-    /*const auto fftSize = leftChannelFFTDataGenerator.getFFTSize();
+    //This causes plug in to crash
+    const auto fftSize = leftChannelFFTDataGenerator.getFFTSize();
     const auto binWidth = sampleRate / double(fftSize);
 
     while (leftChannelFFTDataGenerator.getNumAvailableFFTDataBlocks() > 0)
@@ -239,7 +235,7 @@ void PathProducer::process(juce::Rectangle<float> fftBounds, double sampleRate)
     while (pathProducer.getNumPathsAvailable() > 0)
     {
         pathProducer.getPath(leftChannelFFTPath);
-    }*/
+    }
 }
 
 void ResponseCurveComponent::timerCallback() {
@@ -327,9 +323,9 @@ std::vector<float> ResponseCurveComponent::getFrequencies()
 {
     return std::vector<float>
     {
-        20, /*30, 40,*/ 50, 100,
-            200, /*300, 400,*/ 500, 1000,
-            2000, /*3000, 4000,*/ 5000, 10000,
+        20, 50, 100,
+            200, 500, 1000,
+            2000, 5000, 10000,
             20000
     };
 }

@@ -57,7 +57,7 @@ struct FFTDataGenerator {
     int getFFTSize() const { return 1 << order; }
     int getNumAvailableFFTDataBlocks() const { return fftDataFifo.getNumAvailableForReading(); }
 
-    bool getFFTData(BlockType& fftData) { return fftDataFifo.getNumAvailableForReading(); }
+    bool getFFTData(BlockType& fftData) { return fftDataFifo.pull(fftData); }
     //==============================================================================
 private:
     FFTOrder order;
