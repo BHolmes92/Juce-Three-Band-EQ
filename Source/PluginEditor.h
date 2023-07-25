@@ -79,13 +79,14 @@ struct AnalyzerPathGenerator {
 
         PathType p;
         p.preallocateSpace(3 * (int)fftBounds.getWidth());
-        auto map = [bottom, top, negativeInfinity(float v)] {
+        auto map = [bottom, top, negativeInfinity](float v) {
             return juce::jmap(v, negativeInfinity, 0.f, float(bottom + 10), top);
         };
         auto y = map(renderData[0]);
 
-        if (std::isnan(y) || std::isinf(y))
+        if (std::isnan(y) || std::isinf(y)) {
             y = bottom;
+        }  
         p.startNewSubPath(0, y);
 
         const int pathResolution = 2;
