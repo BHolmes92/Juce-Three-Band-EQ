@@ -224,7 +224,7 @@ void PathProducer::process(juce::Rectangle<float> fftBounds, double sampleRate)
         }
     }
 
-    const auto fftSize = leftChannelFFTDataGenerator.getFFTSize();
+    /*const auto fftSize = leftChannelFFTDataGenerator.getFFTSize();
     const auto binWidth = sampleRate / double(fftSize);
 
     while (leftChannelFFTDataGenerator.getNumAvailableFFTDataBlocks() > 0)
@@ -239,7 +239,7 @@ void PathProducer::process(juce::Rectangle<float> fftBounds, double sampleRate)
     while (pathProducer.getNumPathsAvailable() > 0)
     {
         pathProducer.getPath(leftChannelFFTPath);
-    }
+    }*/
 }
 
 void ResponseCurveComponent::timerCallback() {
@@ -322,11 +322,42 @@ void ResponseCurveComponent::paint(juce::Graphics& g)
     g.drawRoundedRectangle(getRenderArea().toFloat(), 4.f, 1.f);
 
 }
+
+std::vector<float> ResponseCurveComponent::getFrequencies()
+{
+    return std::vector<float>
+    {
+        20, /*30, 40,*/ 50, 100,
+            200, /*300, 400,*/ 500, 1000,
+            2000, /*3000, 4000,*/ 5000, 10000,
+            20000
+    };
+}
+
+std::vector<float> ResponseCurveComponent::getGains()
+{
+    return std::vector<float>
+    {
+        -24, -12, 0, 12, 24
+    };
+}
+
+std::vector<float> ResponseCurveComponent::getXs(const std::vector<float>& freqs, float left, float width)
+{
+    std::vector<float> xs;
+    for (auto f : freqs)
+    {
+        auto normX = juce::mapFromLog10(f, 20.f, 20000.f);
+        xs.push_back(left + width * normX);
+    }
+
+    return xs;
+}
+
 void ResponseCurveComponent::drawBackgroundGrid(juce::Graphics& g) {
     using namespace juce;
-    background = Image(Image::PixelFormat::RGB, getWidth(), getHeight(), true);
 
-    Array<float> freqs{ 20, 50, 100, 200, 500, 1000, 2000, 5000, 10000, 20000 };
+    auto freqs = getFrequencies();
 
     auto renderArea = getDrawArea();
     auto left = renderArea.getX();
@@ -335,18 +366,14 @@ void ResponseCurveComponent::drawBackgroundGrid(juce::Graphics& g) {
     auto bottom = renderArea.getBottom();
     auto width = renderArea.getWidth();
 
-    Array<float> xs;
-    for (auto f : freqs) {
-        auto normX = mapFromLog10(f, 20.f, 20000.f);
-        xs.add(left + width * normX);
-    }
+    auto xs = getXs(freqs, left, width);
 
     g.setColour(Colours::dimgrey);
     for (auto f : xs) {
         g.drawVerticalLine(f, top, bottom);
     }
 
-    Array<float>gain{ -24, -12, 0, 12, 24 };
+    auto gain = getGains();
     for (auto gDb : gain) {
         auto y = jmap(gDb, -24.f, 24.f, float(bottom), float(top));
         g.setColour(gDb == 0.f ? Colour(0u, 172u, 1u) : Colours::darkgrey);
@@ -356,22 +383,19 @@ void ResponseCurveComponent::drawBackgroundGrid(juce::Graphics& g) {
 
 void ResponseCurveComponent::drawTextLabels(juce::Graphics& g) {
     using namespace juce;
-    Array<float> freqs{ 20, 50, 100, 200, 500, 1000, 2000, 5000, 10000, 20000 };
-    Array<float>gain{ -24, -12, 0, 12, 24 };
+    auto freqs = getFrequencies();
     auto renderArea = getDrawArea();
     auto left = renderArea.getX();
     auto right = renderArea.getRight();
     auto top = renderArea.getY();
     auto bottom = renderArea.getBottom();
     auto width = renderArea.getWidth();
+    auto xs = getXs(freqs, left, width);
+
     g.setColour(Colours::lightgrey);
     const int fontHeight = 10;
     g.setFont(fontHeight);
-    Array<float> xs;
-    for (auto f : freqs) {
-        auto normX = mapFromLog10(f, 20.f, 20000.f);
-        xs.add(left + width * normX);
-    }
+    
     for (int i = 0; i < freqs.size(); ++i) {
         auto f = freqs[i];
         auto x = xs[i];
@@ -397,7 +421,7 @@ void ResponseCurveComponent::drawTextLabels(juce::Graphics& g) {
 
         g.drawFittedText(str, r, juce::Justification::centred, 1);
     }
-
+    auto gain = getGains();
     for (auto gDb : gain) {
         auto y = jmap(gDb, -24.f, 24.f, float(bottom), float(top));
 
@@ -476,8 +500,11 @@ void ResponseCurveComponent::updateResponseCurve(){
                 mag *= highcut.get<3>().coefficients->getMagnitudeForFrequency(freq, sampleRate);
             }
         }
-        responseCurve.clear();
+        mags[i] = Decibels::gainToDecibels(mag);
     }
+
+    responseCurve.clear();
+
     const double outputMin = responseArea.getBottom();
     const double outputMax = responseArea.getY();
     auto map = [outputMin, outputMax](double input) {
@@ -486,7 +513,7 @@ void ResponseCurveComponent::updateResponseCurve(){
     responseCurve.startNewSubPath(responseArea.getX(), map(mags.front()));
 
     for (size_t i = 1; i < mags.size(); ++i) {
-        responseCurve.lineTo(responseArea.getX() + 1, map(mags[i]));
+        responseCurve.lineTo(responseArea.getX() + i, map(mags[i]));
     }
 
 }

@@ -202,6 +202,10 @@ private:
 
     PathProducer leftPathProducer, rightPathProducer;
     bool showFFTAnalysis = true;
+
+    std::vector<float> getGains();
+    std::vector<float> getFrequencies();
+    std::vector<float> getXs(const std::vector<float>& freqs, float left, float width);
 };
 
 //==============================================================================
